@@ -71,6 +71,8 @@
             font-size: 11px;
             max-width: 280px;
             z-index: 100;
+            max-height: 300px;
+            overflow-y: auto;
         }
 
         .mission-item {
@@ -206,12 +208,27 @@
         .control-key { color: #00ff00; font-weight: bold; }
         .control-desc { color: #e0e0e0; }
 
-        /* Animaciones */
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
+        /* Portal Indicator */
+        #portal-hint {
+            position: absolute;
+            bottom: 150px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff64ff;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 11px;
+            color: #ff64ff;
+            z-index: 100;
+            animation: pulse 1s infinite;
         }
 
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Animaciones */
         .pulse { animation: pulse 1.5s infinite; }
 
         @keyframes floatBounce {
@@ -245,6 +262,11 @@
     <div id="minimap-container">
         <div style="color: #ff6b6b; font-size: 10px; margin-bottom: 5px;">MINIMAP</div>
         <canvas id="minimap"></canvas>
+    </div>
+
+    <!-- Portal Hint -->
+    <div id="portal-hint">
+        🌀 PORTAL CERCANO<br>Presiona P
     </div>
 
     <!-- Controles -->
@@ -294,6 +316,7 @@ let tutorialStep = 0;
 let keys = {};
 let frameCount = 0;
 let currentZone = 'centro';
+let exploredZones = new Set(['centro']);
 let itemsCollected = { plastic: 0, paper: 0, glass: 0, organic: 0 };
 
 // ============================================================
@@ -343,6 +366,16 @@ const ZONES = {
 };
 
 // ============================================================
+// PORTALES PARA VIAJAR - POSICIÓN CORRECTA
+// ============================================================
+const PORTALS = {
+    centro: { x: 28, y: 16, nextZone: 'miraflores' },
+    miraflores: { x: 28, y: 16, nextZone: 'sanisidro' },
+    sanisidro: { x: 28, y: 16, nextZone: 'barranco' },
+    barranco: { x: 28, y: 16, nextZone: 'centro' }
+};
+
+// ============================================================
 // OBJETOS DEL JUEGO
 // ============================================================
 let player = { x: 16, y: 15 };
@@ -350,6 +383,7 @@ let enzo = { x: 18, y: 13, bobOffset: 0 };
 let trashItems = [];
 let activeMission = null;
 let completedMissions = [];
+let nearPortal = false;
 
 // ============================================================
 // SISTEMA DE MISIONES
@@ -433,9 +467,9 @@ const TUTORIAL_DIALOGUES = [
     "Cada color representa un tipo diferente: 🟡Plástico 🔵Papel 🟢Vidrio 🟤Orgánico.",
     "Tus items recolectados aparecerán en el HUD superior.",
     "¡Completa misiones para ganar muchos puntos!",
-    "Puedes viajar entre zonas usando los PORTALES (P).",
-    "Explora diferentes áreas de Lima mientras reciclas.",
-    "¿Listo para convertirte en un héroe ecológico? ¡Vamos!"
+    "En la esquina derecha hay un PORTAL mágico 🌀",
+    "Cuando estés cerca del portal, presiona P para viajar a otra zona.",
+    "Explora todas las áreas de Lima mientras reciclas. ¡Vamos!"
 ];
 
 // ============================================================
@@ -512,13 +546,20 @@ const render = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawMap();
 
-    // Dibujar Portal
+    // Dibujar Portal con animación
     const portal = PORTALS[currentZone];
-    ctx.fillStyle = 'rgba(255, 100, 255, 0.6)';
+    const portalPulse = Math.sin(frameCount * 0.1) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255, 100, 255, ${portalPulse})`;
     ctx.fillRect(portal.x * TILE, portal.y * TILE, TILE * 2, TILE * 2);
+    
+    // Borde del portal
+    ctx.strokeStyle = '#ff64ff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(portal.x * TILE, portal.y * TILE, TILE * 2, TILE * 2);
+    
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px Arial';
-    ctx.fillText('🌀', portal.x * TILE + 8, portal.y * TILE + 18);
+    ctx.font = 'bold 14px Arial';
+    ctx.fillText('🌀', portal.x * TILE + 6, portal.y * TILE + 20);
 
     // Dibujar Basura
     trashItems.forEach(t => {
@@ -615,22 +656,27 @@ const update = () => {
 
     // Portal para cambiar zona
     const portal = PORTALS[currentZone];
-    if (Math.hypot(player.x - (portal.x + 1), player.y - (portal.y + 1)) < 1.5) {
-        if (keys['p']) {
-            currentZone = portal.nextZone;
-            player.x = 5;
-            player.y = 15;
-            trashItems = [];
-            keys['p'] = false;
-            updateUI();
-            
-            // Contar zonas exploradas
-            const uniqueZones = new Set([...completedMissions.map(m => m.zone), currentZone]);
-            if (activeMission?.type === 'explore_zones') {
-                missionProgress[activeMission.id].progress = uniqueZones.size;
-                if (missionProgress[activeMission.id].progress >= activeMission.target) {
-                    completeMission(activeMission.id);
-                }
+    const distanceToPortal = Math.hypot(player.x - (portal.x + 1), player.y - (portal.y + 1));
+    
+    // Mostrar hint cuando está cerca
+    nearPortal = distanceToPortal < 2.5;
+    const portalHint = document.getElementById('portal-hint');
+    portalHint.style.display = nearPortal ? 'block' : 'none';
+    
+    if (distanceToPortal < 2.5 && keys['p']) {
+        currentZone = portal.nextZone;
+        exploredZones.add(currentZone);
+        player.x = 5;
+        player.y = 15;
+        trashItems = [];
+        keys['p'] = false;
+        updateUI();
+        
+        // Actualizar misión de explorador
+        if (activeMission?.type === 'explore_zones') {
+            missionProgress[activeMission.id].progress = exploredZones.size;
+            if (missionProgress[activeMission.id].progress >= activeMission.target) {
+                completeMission(activeMission.id);
             }
         }
     }
@@ -651,7 +697,7 @@ const spawnTrash = () => {
     };
     const type = types[Math.floor(Math.random() * 4)];
     trashItems.push({
-        x: Math.random() * (COLS - 4) + 2,
+        x: Math.random() * (COLS - 6) + 2,
         y: 8 + Math.random() * (ROWS - 13),
         type: type,
         color: colors[type],
@@ -718,6 +764,16 @@ const drawMinimap = () => {
     const scaleX = minimapCanvas.width / (COLS * TILE);
     const scaleY = minimapCanvas.height / (ROWS * TILE);
     
+    // Dibujar portal
+    const portal = PORTALS[currentZone];
+    minimapCtx.fillStyle = '#ff64ff';
+    minimapCtx.fillRect(
+        portal.x * TILE * scaleX,
+        portal.y * TILE * scaleY,
+        8 * scaleX,
+        8 * scaleY
+    );
+    
     // Dibujar jugador
     minimapCtx.fillStyle = '#00ff00';
     minimapCtx.fillRect(
@@ -735,16 +791,6 @@ const drawMinimap = () => {
         6 * scaleX,
         8 * scaleY
     );
-};
-
-// ============================================================
-// PORTALES PARA VIAJAR
-// ============================================================
-const PORTALS = {
-    centro: { x: 30, y: 18, nextZone: 'miraflores' },
-    miraflores: { x: 30, y: 18, nextZone: 'sanisidro' },
-    sanisidro: { x: 30, y: 18, nextZone: 'barranco' },
-    barranco: { x: 30, y: 18, nextZone: 'centro' }
 };
 
 // ============================================================
