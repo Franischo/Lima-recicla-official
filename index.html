@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lima Recicla: Enzo-bot Edition - Juego Educativo</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Press Start 2P', cursive; 
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        #game-container { 
+            position: relative; 
+            width: 100vw; 
+            height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b4e 100%);
+        }
+        
+        canvas { 
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 8px solid #00d4ff;
+            background: #1a1f3a;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        /* HUD Principal */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ff00;
+            text-shadow: 3px 3px #000, 0 0 10px rgba(0, 255, 0, 0.7);
+            font-size: 14px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 20px;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+        }
+
+        #score { color: #ffff00; font-weight: bold; }
+        #zone-name { color: #00d4ff; display: block; margin-top: 8px; font-size: 12px; }
+        #items-collected { 
+            display: block; 
+            margin-top: 8px; 
+            font-size: 11px;
+            color: #ff6b6b;
+        }
+
+        /* Panel de Misiones */
+        #missions-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border: 2px solid #ffd700;
+            border-radius: 5px;
+            font-size: 11px;
+            max-width: 280px;
+            z-index: 100;
+        }
+
+        .mission-item {
+            background: rgba(255, 215, 0, 0.1);
+            padding: 8px;
+            margin: 5px 0;
+            border-left: 3px solid #ffd700;
+            border-radius: 3px;
+        }
+
+        .mission-item.active {
+            background: rgba(0, 212, 255, 0.2);
+            border-left-color: #00d4ff;
+        }
+
+        .mission-item.completed {
+            background: rgba(0, 255, 0, 0.1);
+            border-left-color: #00ff00;
+            opacity: 0.6;
+        }
+
+        .mission-title { color: #ffd700; font-weight: bold; }
+        .mission-progress { color: #00d4ff; margin-top: 3px; font-size: 10px; }
+
+        /* Diálogos */
+        #ui-overlay { 
+            position: absolute; 
+            inset: 0; 
+            pointer-events: none; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: flex-end; 
+            align-items: center; 
+            padding-bottom: 50px;
+            z-index: 200;
+        }
+
+        #dialogue-box { 
+            width: 90%; 
+            max-width: 700px; 
+            background: rgba(0, 0, 0, 0.95);
+            border: 4px solid #00d4ff;
+            color: #fff; 
+            padding: 25px; 
+            display: none; 
+            pointer-events: all; 
+            position: relative;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        #enzo-portrait { 
+            position: absolute; 
+            top: -70px; 
+            left: 20px; 
+            width: 60px; 
+            height: 60px; 
+            background: #bdc3c7;
+            border: 3px solid #00d4ff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+
+        #dialogue-text { 
+            font-size: 12px; 
+            line-height: 1.8;
+            margin-left: 70px;
+            color: #e0e0e0;
+        }
+
+        .btn-next { 
+            background: linear-gradient(135deg, #00ff00 0%, #00dd00 100%);
+            color: #000; 
+            padding: 8px 15px; 
+            cursor: pointer; 
+            margin-top: 15px; 
+            float: right; 
+            font-size: 11px;
+            border: 2px solid #000;
+            border-radius: 3px;
+            font-family: 'Press Start 2P', cursive;
+            transition: all 0.3s;
+        }
+
+        .btn-next:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+        }
+
+        /* Minimap */
+        #minimap-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff6b6b;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+
+        #minimap {
+            width: 120px;
+            height: 80px;
+            background: #1a1f3a;
+            border: 1px solid #ff6b6b;
+        }
+
+        /* Controles */
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ffd700;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 10px;
+            max-width: 200px;
+            z-index: 100;
+        }
+
+        .control-key { color: #00ff00; font-weight: bold; }
+        .control-desc { color: #e0e0e0; }
+
+        /* Animaciones */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .pulse { animation: pulse 1.5s infinite; }
+
+        @keyframes floatBounce {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .float-bounce { animation: floatBounce 2s infinite; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- HUD Principal -->
+    <div id="hud">
+        <div>LIMA RECICLA</div>
+        <div>PUNTOS: <span id="score">0000</span></div>
+        <div id="zone-name">ZONA: CENTRO</div>
+        <div id="items-collected">ITEMS: 🟡 <span id="plastic-count">0</span> 🔵 <span id="paper-count">0</span> 🟢 <span id="glass-count">0</span> 🟤 <span id="organic-count">0</span></div>
+    </div>
+
+    <!-- Panel de Misiones -->
+    <div id="missions-panel">
+        <div style="color: #ffd700; margin-bottom: 10px; border-bottom: 1px solid #ffd700; padding-bottom: 5px;">
+            ⭐ MISIONES ACTIVAS
+        </div>
+        <div id="missions-list"></div>
+    </div>
+
+    <!-- Minimap -->
+    <div id="minimap-container">
+        <div style="color: #ff6b6b; font-size: 10px; margin-bottom: 5px;">MINIMAP</div>
+        <canvas id="minimap"></canvas>
+    </div>
+
+    <!-- Controles -->
+    <div id="controls-info">
+        <div style="color: #ffd700; margin-bottom: 8px; border-bottom: 1px solid #ffd700; padding-bottom: 5px;">CONTROLES</div>
+        <div><span class="control-key">↑↓←→</span> <span class="control-desc">Mover</span></div>
+        <div><span class="control-key">WASD</span> <span class="control-desc">Mover</span></div>
+        <div><span class="control-key">P</span> <span class="control-desc">Portal</span></div>
+    </div>
+
+    <!-- UI Overlay - Diálogos -->
+    <div id="ui-overlay">
+        <div id="dialogue-box">
+            <div id="enzo-portrait">🤖</div>
+            <div id="dialogue-text">...</div>
+            <button class="btn-next" onclick="nextTutorialStep()">SIGUIENTE ➤</button>
+        </div>
+    </div>
+
+    <!-- Canvas Principal -->
+    <canvas id="game"></canvas>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN GLOBAL
+// ============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimap');
+const minimapCtx = minimapCanvas.getContext('2d');
+
+const TILE = 20;
+const COLS = 32;
+const ROWS = 20;
+canvas.width = COLS * TILE;
+canvas.height = ROWS * TILE;
+minimapCanvas.width = 120;
+minimapCanvas.height = 80;
+
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
+let gameState = 'TUTORIAL';
+let score = 0;
+let tutorialStep = 0;
+let keys = {};
+let frameCount = 0;
+let currentZone = 'centro';
+let itemsCollected = { plastic: 0, paper: 0, glass: 0, organic: 0 };
+
+// ============================================================
+// DEFINICIÓN DE ZONAS - MAPAS REALES DE LIMA
+// ============================================================
+const ZONES = {
+    centro: {
+        name: '🏛️ CENTRO HISTÓRICO',
+        description: 'El corazón de Lima colonial',
+        bgColor: '#8B7355',
+        theme: 'colonial',
+        landmarks: [
+            { x: 5, y: 3, name: 'Plaza Mayor', type: 'landmark' },
+            { x: 25, y: 5, name: 'Catedral', type: 'landmark' }
+        ]
+    },
+    miraflores: {
+        name: '🌆 MIRAFLORES',
+        description: 'Zona moderna y costera',
+        bgColor: '#87CEEB',
+        theme: 'modern',
+        landmarks: [
+            { x: 8, y: 4, name: 'Parque Kennedy', type: 'landmark' },
+            { x: 22, y: 15, name: 'Acantilado', type: 'landmark' }
+        ]
+    },
+    sanisidro: {
+        name: '💼 SAN ISIDRO',
+        description: 'Zona corporativa y financiera',
+        bgColor: '#D3D3D3',
+        theme: 'corporate',
+        landmarks: [
+            { x: 10, y: 8, name: 'Torre Financiera', type: 'landmark' },
+            { x: 20, y: 12, name: 'Parque Empresarial', type: 'landmark' }
+        ]
+    },
+    barranco: {
+        name: '🎨 BARRANCO',
+        description: 'Zona bohemia y cultural',
+        bgColor: '#FFB6C1',
+        theme: 'bohemian',
+        landmarks: [
+            { x: 12, y: 6, name: 'Puente de los Suspiros', type: 'landmark' },
+            { x: 8, y: 14, name: 'Galería de Arte', type: 'landmark' }
+        ]
+    }
+};
+
+// ============================================================
+// OBJETOS DEL JUEGO
+// ============================================================
+let player = { x: 16, y: 15 };
+let enzo = { x: 18, y: 13, bobOffset: 0 };
+let trashItems = [];
+let activeMission = null;
+let completedMissions = [];
+
+// ============================================================
+// SISTEMA DE MISIONES
+// ============================================================
+const MISSIONS = [
+    {
+        id: 'cleanup_quick',
+        title: '🗑️ LIMPIEZA RÁPIDA',
+        description: 'Recoge 5 items de basura',
+        target: 5,
+        type: 'collect',
+        reward: 100,
+        difficulty: 1,
+        icon: '🗑️'
+    },
+    {
+        id: 'eco_champion',
+        title: '🏆 ECOVALENTE',
+        description: 'Recoge 20 items en total',
+        target: 20,
+        type: 'collect_total',
+        reward: 500,
+        difficulty: 2,
+        icon: '🏆'
+    },
+    {
+        id: 'zone_explorer',
+        title: '🌍 EXPLORADOR VERDE',
+        description: 'Visita todas las 4 zonas',
+        target: 4,
+        type: 'explore_zones',
+        reward: 400,
+        difficulty: 2,
+        icon: '🌍'
+    },
+    {
+        id: 'speed_race',
+        title: '⚡ CONTRA RELOJ',
+        description: 'Recoge 10 items rápido',
+        target: 10,
+        type: 'speedrace',
+        reward: 300,
+        difficulty: 3,
+        icon: '⚡'
+    },
+    {
+        id: 'plastic_hunter',
+        title: '💛 CAZADOR DE PLÁSTICO',
+        description: 'Recoge 10 plásticos',
+        target: 10,
+        type: 'collect_plastic',
+        reward: 250,
+        difficulty: 2,
+        icon: '💛'
+    },
+    {
+        id: 'master_cleaner',
+        title: '🎯 MAESTRO LIMPIADOR',
+        description: 'Completa todas las misiones',
+        target: 5,
+        type: 'complete_all',
+        reward: 1000,
+        difficulty: 5,
+        icon: '🎯'
+    }
+];
+
+let missionProgress = {};
+MISSIONS.forEach(m => {
+    missionProgress[m.id] = { progress: 0, completed: false };
+});
+
+// ============================================================
+// DIÁLOGOS DE TUTORIAL
+// ============================================================
+const TUTORIAL_DIALOGUES = [
+    "¡Hola! Soy Enzo-bot, tu compañero ambiental de Lima.",
+    "La ciudad está llena de basura. ¡Necesitamos tu ayuda!",
+    "Usa las FLECHAS o WASD para moverte por las calles.",
+    "Recoge todos los residuos que encuentres en el camino.",
+    "Cada color representa un tipo diferente: 🟡Plástico 🔵Papel 🟢Vidrio 🟤Orgánico.",
+    "Tus items recolectados aparecerán en el HUD superior.",
+    "¡Completa misiones para ganar muchos puntos!",
+    "Puedes viajar entre zonas usando los PORTALES (P).",
+    "Explora diferentes áreas de Lima mientras reciclas.",
+    "¿Listo para convertirte en un héroe ecológico? ¡Vamos!"
+];
+
+// ============================================================
+// SPRITES PIXEL ART
+// ============================================================
+const drawPixelArt = (matrix, x, y, size, colors) => {
+    matrix.forEach((row, rowIndex) => {
+        [...row].forEach((char, colIndex) => {
+            if (char !== ' ') {
+                ctx.fillStyle = colors[char] || '#000';
+                ctx.fillRect(x + colIndex * size, y + rowIndex * size, size, size);
+            }
+        });
+    });
+};
+
+const SPRITES = {
+    human: [
+        "  PPP   ",
+        " PPPP   ",
+        "  RRR   ",
+        " WWWWW  ",
+        "  RRR   ",
+        "  B B   ",
+        "  B B   ",
+        "  L L   "
+    ],
+    enzo: [
+        "  MMM   ",
+        " MBMAM  ",
+        " MMMMM  ",
+        "  MMM   ",
+        "   V    "
+    ]
+};
+
+const PALETTE = {
+    P: '#ffdbac', R: '#ee1b2e', W: '#ffffff', B: '#2d3436', L: '#4a2c2a',
+    M: '#bdc3c7', A: '#f1c40f', V: '#81ecec', Y: '#ffff00'
+};
+
+// ============================================================
+// MOTOR DE RENDERIZADO
+// ============================================================
+const drawMap = () => {
+    const zone = ZONES[currentZone];
+    
+    // Cielo
+    ctx.fillStyle = zone.bgColor;
+    ctx.fillRect(0, 0, canvas.width, 100);
+
+    // Veredas
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillRect(0, 100, canvas.width, 40);
+    ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+
+    // Pista/Calle
+    ctx.fillStyle = '#34495e';
+    ctx.fillRect(0, 140, canvas.width, canvas.height - 180);
+
+    // Líneas de calle (amarillas)
+    ctx.fillStyle = '#f1c40f';
+    for (let i = 0; i < COLS; i += 4) {
+        ctx.fillRect(i * TILE, canvas.height / 2 + 20, TILE * 2, 4);
+    }
+
+    // Dibujar zona name
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText(zone.name, 20, 130);
+};
+
+const render = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawMap();
+
+    // Dibujar Portal
+    const portal = PORTALS[currentZone];
+    ctx.fillStyle = 'rgba(255, 100, 255, 0.6)';
+    ctx.fillRect(portal.x * TILE, portal.y * TILE, TILE * 2, TILE * 2);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('🌀', portal.x * TILE + 8, portal.y * TILE + 18);
+
+    // Dibujar Basura
+    trashItems.forEach(t => {
+        if (!t.collected) {
+            ctx.fillStyle = t.color;
+            ctx.fillRect(t.x * TILE + 5, t.y * TILE + 5, 10, 10);
+            
+            // Brillo
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fillRect(t.x * TILE + 5, t.y * TILE + 5, 4, 4);
+        }
+    });
+
+    // Dibujar Enzo-bot (flotando)
+    enzo.bobOffset = Math.sin(frameCount * 0.1) * 5;
+    ctx.fillStyle = '#bdc3c7';
+    ctx.beginPath();
+    ctx.arc(enzo.x * TILE + 7, enzo.y * TILE + 7 + enzo.bobOffset, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(enzo.x * TILE + 4, enzo.y * TILE + 4 + enzo.bobOffset, 6, 6);
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(enzo.x * TILE + 12, enzo.y * TILE + 2 + enzo.bobOffset, 3, 3);
+
+    // Dibujar Jugador
+    drawPixelArt(SPRITES.human, player.x * TILE, player.y * TILE, 3, PALETTE);
+
+    // Indicador de items recolectados
+    let totalCollected = Object.values(itemsCollected).reduce((a, b) => a + b, 0);
+    if (totalCollected > 0) {
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText(`+${totalCollected}`, player.x * TILE + 5, player.y * TILE - 10);
+    }
+
+    frameCount++;
+};
+
+// ============================================================
+// LÓGICA DEL JUEGO
+// ============================================================
+const update = () => {
+    if (gameState !== 'PLAYING') return;
+
+    // Movimiento del jugador
+    const speed = 0.15;
+    if (keys['arrowup'] || keys['w']) player.y -= speed;
+    if (keys['arrowdown'] || keys['s']) player.y += speed;
+    if (keys['arrowleft'] || keys['a']) player.x -= speed;
+    if (keys['arrowright'] || keys['d']) player.x += speed;
+
+    // Colisiones con bordes
+    player.x = Math.max(1, Math.min(COLS - 3, player.x));
+    player.y = Math.max(5, Math.min(ROWS - 3, player.y));
+
+    // Recoger items de basura
+    trashItems.forEach(t => {
+        if (!t.collected && Math.hypot(player.x - t.x, player.y - t.y) < 1.2) {
+            t.collected = true;
+            itemsCollected[t.type]++;
+            score += 10;
+            updateUI();
+            
+            // Actualizar misiones
+            if (activeMission?.type === 'collect') {
+                missionProgress[activeMission.id].progress++;
+                if (missionProgress[activeMission.id].progress >= activeMission.target) {
+                    completeMission(activeMission.id);
+                }
+            }
+            
+            if (activeMission?.type === 'collect_total') {
+                missionProgress[activeMission.id].progress++;
+                if (missionProgress[activeMission.id].progress >= activeMission.target) {
+                    completeMission(activeMission.id);
+                }
+            }
+            
+            if (activeMission?.type === 'collect_plastic' && t.type === 'plastic') {
+                missionProgress[activeMission.id].progress++;
+                if (missionProgress[activeMission.id].progress >= activeMission.target) {
+                    completeMission(activeMission.id);
+                }
+            }
+            
+            if (activeMission?.type === 'speedrace') {
+                missionProgress[activeMission.id].progress++;
+                if (missionProgress[activeMission.id].progress >= activeMission.target) {
+                    completeMission(activeMission.id);
+                }
+            }
+        }
+    });
+
+    // Portal para cambiar zona
+    const portal = PORTALS[currentZone];
+    if (Math.hypot(player.x - (portal.x + 1), player.y - (portal.y + 1)) < 1.5) {
+        if (keys['p']) {
+            currentZone = portal.nextZone;
+            player.x = 5;
+            player.y = 15;
+            trashItems = [];
+            keys['p'] = false;
+            updateUI();
+            
+            // Contar zonas exploradas
+            const uniqueZones = new Set([...completedMissions.map(m => m.zone), currentZone]);
+            if (activeMission?.type === 'explore_zones') {
+                missionProgress[activeMission.id].progress = uniqueZones.size;
+                if (missionProgress[activeMission.id].progress >= activeMission.target) {
+                    completeMission(activeMission.id);
+                }
+            }
+        }
+    }
+
+    // Generar basura
+    if (frameCount % 100 === 0 && trashItems.length < 8) {
+        spawnTrash();
+    }
+};
+
+const spawnTrash = () => {
+    const types = ['plastic', 'paper', 'glass', 'organic'];
+    const colors = {
+        plastic: '#ffff00',
+        paper: '#0000ff',
+        glass: '#00ff00',
+        organic: '#8b4513'
+    };
+    const type = types[Math.floor(Math.random() * 4)];
+    trashItems.push({
+        x: Math.random() * (COLS - 4) + 2,
+        y: 8 + Math.random() * (ROWS - 13),
+        type: type,
+        color: colors[type],
+        collected: false
+    });
+};
+
+// ============================================================
+// COMPLETAR MISIÓN
+// ============================================================
+const completeMission = (missionId) => {
+    if (!missionProgress[missionId].completed) {
+        missionProgress[missionId].completed = true;
+        const mission = MISSIONS.find(m => m.id === missionId);
+        if (mission) {
+            score += mission.reward;
+            completedMissions.push({ id: missionId, zone: currentZone });
+            updateUI();
+        }
+    }
+};
+
+// ============================================================
+// ACTUALIZACIÓN DE UI
+// ============================================================
+const updateUI = () => {
+    document.getElementById('score').innerText = score.toString().padStart(4, '0');
+    document.getElementById('zone-name').innerText = `ZONA: ${ZONES[currentZone].name}`;
+    
+    document.getElementById('plastic-count').innerText = itemsCollected.plastic;
+    document.getElementById('paper-count').innerText = itemsCollected.paper;
+    document.getElementById('glass-count').innerText = itemsCollected.glass;
+    document.getElementById('organic-count').innerText = itemsCollected.organic;
+    
+    updateMissionsPanel();
+    drawMinimap();
+};
+
+const updateMissionsPanel = () => {
+    const panel = document.getElementById('missions-list');
+    panel.innerHTML = '';
+    
+    MISSIONS.forEach(mission => {
+        const progress = missionProgress[mission.id];
+        const isActive = activeMission?.id === mission.id;
+        const isCompleted = progress.completed;
+        
+        const element = document.createElement('div');
+        element.className = `mission-item ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`;
+        element.innerHTML = `
+            <div class="mission-title">${mission.icon} ${mission.title}</div>
+            <div class="mission-progress">${mission.description}</div>
+            <div class="mission-progress">Progreso: ${progress.progress}/${mission.target}</div>
+        `;
+        panel.appendChild(element);
+    });
+};
+
+const drawMinimap = () => {
+    minimapCtx.fillStyle = '#1a1f3a';
+    minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+    
+    // Escala minimap
+    const scaleX = minimapCanvas.width / (COLS * TILE);
+    const scaleY = minimapCanvas.height / (ROWS * TILE);
+    
+    // Dibujar jugador
+    minimapCtx.fillStyle = '#00ff00';
+    minimapCtx.fillRect(
+        player.x * TILE * scaleX,
+        player.y * TILE * scaleY,
+        6 * scaleX,
+        8 * scaleY
+    );
+    
+    // Dibujar Enzo
+    minimapCtx.fillStyle = '#00d4ff';
+    minimapCtx.fillRect(
+        enzo.x * TILE * scaleX,
+        enzo.y * TILE * scaleY,
+        6 * scaleX,
+        8 * scaleY
+    );
+};
+
+// ============================================================
+// PORTALES PARA VIAJAR
+// ============================================================
+const PORTALS = {
+    centro: { x: 30, y: 18, nextZone: 'miraflores' },
+    miraflores: { x: 30, y: 18, nextZone: 'sanisidro' },
+    sanisidro: { x: 30, y: 18, nextZone: 'barranco' },
+    barranco: { x: 30, y: 18, nextZone: 'centro' }
+};
+
+// ============================================================
+// TUTORIAL
+// ============================================================
+const startTutorial = () => {
+    document.getElementById('dialogue-box').style.display = 'block';
+    nextTutorialStep();
+};
+
+const nextTutorialStep = () => {
+    if (tutorialStep < TUTORIAL_DIALOGUES.length) {
+        document.getElementById('dialogue-text').innerText = TUTORIAL_DIALOGUES[tutorialStep];
+        tutorialStep++;
+    } else {
+        document.getElementById('dialogue-box').style.display = 'none';
+        gameState = 'PLAYING';
+        activeMission = MISSIONS[0];
+        enzo.x = 1;
+        enzo.y = 17;
+        updateUI();
+    }
+};
+
+// ============================================================
+// LOOP PRINCIPAL
+// ============================================================
+const gameLoop = () => {
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+};
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+});
+
+// ============================================================
+// INICIAR JUEGO
+// ============================================================
+startTutorial();
+gameLoop();
+updateUI();
+</script>
+
+</body>
+</html>
